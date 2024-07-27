@@ -8,6 +8,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -17,8 +19,11 @@ using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.Library;
 using Siemens.Engineering.Library.MasterCopies;
 using Siemens.Engineering.Library.Types;
+using Siemens.Engineering.MC.Drives;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Tags;
+using Siemens.Engineering.SW.Types;
 
 namespace TIAOpennessProjectGenerator
 {
@@ -31,7 +36,6 @@ namespace TIAOpennessProjectGenerator
         public MainPage()
         {
             InitializeComponent();
-            UpdateUserHint(toolNavigator.SelectedIndex);
         }
 
         #region Shared Functions
@@ -67,32 +71,6 @@ namespace TIAOpennessProjectGenerator
             }
         }
 
-        private void UpdateUserHint(int tabindex)
-        {
-            userHints.Clear();
-            switch (tabindex)
-            {
-                case 0:
-                    userHints.Text = "Please select a TIA Portal instance to continue.";
-                    break;
-                case 1:
-                    userHints.Text = "Please select or create a new project for the ensuing program and hardware generation.";
-                    break;
-                case 2:
-                    userHints.Text = "Please open the library that you want to use for the ensuing program and hardware generation.";
-                    break;
-                case 3:
-                    userHints.Text = "Please specify the hardware mastercopy for the hardware configuration generation and their number and properties.";
-                    break;
-                case 4:
-                    userHints.Text = "Please specify the software for generation and their number.";
-                    break;
-                default:
-                    userHints.Text = "Error, please restart.";
-                    break;
-            }
-        }
-
         private void UpdateProjectPathText()
         {
             if (tiaportal != null && tiaportal.Projects.Count == 1)
@@ -100,6 +78,7 @@ namespace TIAOpennessProjectGenerator
                 projectPathText.Text = tiaportal.Projects[0].Path.ToString();
             }
         }
+
         private void UpdateLibraryPathText()
         {
             
@@ -169,10 +148,75 @@ namespace TIAOpennessProjectGenerator
             }
         }
 
-        private void ToolNavigatorIndexChanged(object sender, EventArgs e)
+        private void UpdateS120ModuleList()
         {
-            UpdateUserHint(toolNavigator.SelectedIndex);
-            
+            int i = 0;
+            s120ConfigList.Items.Clear();
+
+            string[] s120Modules = { "BLM", "SLM", "ALM", "SMM", "DMM" };
+
+            for (int index = 0; index < 5; index ++)
+            {
+                s120ConfigList.Items.Add(s120Modules[index]);
+                s120ConfigList.Items[i].SubItems.Add("0");
+                s120ConfigList.Items[i].SubItems.Add("500");
+                s120ConfigList.Items[i].SubItems.Add("999");
+                i++;
+            }
+        }
+         
+        private void UpdateConfigeredS120List()
+        {
+            if (tiaportal.Projects[0].Devices.Count > 0)
+            {
+                s120StationsList.Items.Clear();
+                DeviceComposition configuredDevices = tiaportal.Projects[0].Devices;
+
+                foreach (Device theDevice in configuredDevices)
+                {
+                    if (theDevice.Name.Contains("SINAMICS S"))
+                    {
+                        s120StationsList.Items.Add(theDevice.Name);
+                    }
+                }
+            }
+        }
+
+        private void UpdateET200SPModuleList()
+        {
+            int i = 0;
+            et200SPConfigList.Items.Clear();
+
+            string[] et200SPModules = { "DI8", "DQ8", "AI2", "AO2", "F-DI8", "F-DQ8" };
+
+            for (int index = 0; index < 6; index ++)
+            {
+                et200SPConfigList.Items.Add(et200SPModules[index]);
+                et200SPConfigList.Items[i].SubItems.Add("0");
+                et200SPConfigList.Items[i].SubItems.Add("1000");
+                i++;
+            }
+        }
+
+        private void UpdateConfiguredET200SPList()
+        {
+            if (tiaportal.Projects[0].Devices.Count > 0)
+            {
+                et200SPStationList.Items.Clear();
+                DeviceComposition configuredDevices = tiaportal.Projects[0].Devices;
+
+                foreach (Device theDevice in configuredDevices)
+                {
+                    if (theDevice.Name.Contains("WZET200"))
+                    {
+                        et200SPStationList.Items.Add(theDevice.Name);
+                    }
+                }
+            }
+        }
+
+        private void ToolNavigatorIndexChanged(object sender, EventArgs e)
+        {   
             switch (toolNavigator.SelectedIndex)
             {
                 case 1:
@@ -195,6 +239,22 @@ namespace TIAOpennessProjectGenerator
                     if (tiaportal != null && tiaportal.GlobalLibraries.Count > 0)
                     {
                         UpdateSWList();
+                    }
+                    break;
+
+                case 5:
+                    if (tiaportal != null && tiaportal.GlobalLibraries.Count > 0)
+                    {
+                        UpdateS120ModuleList();
+                        UpdateConfigeredS120List();
+                    }
+                    break;
+
+                case 6:
+                    if (tiaportal != null && tiaportal.GlobalLibraries.Count > 0)
+                    {
+                        UpdateET200SPModuleList();
+                        UpdateConfiguredET200SPList();
                     }
                     break;
 
@@ -346,9 +406,14 @@ namespace TIAOpennessProjectGenerator
             }
             else
             {
+                PromptWindow promptWindow = new PromptWindow("Please input project name", "Project Name");
+                string projectname = promptWindow.Result;
+                if (projectname != "")
+                {
+                    tiaportal.Projects.Create(new DirectoryInfo(projectPathText.Text), projectname);
+                }
 
-
-                tiaportal.Projects.Create(new DirectoryInfo(projectPathText.Text), "TIAOpennessGeneratedProject");
+                promptWindow.Dispose();
             }
         }
 
@@ -486,7 +551,7 @@ namespace TIAOpennessProjectGenerator
                             deviceInterface.Nodes[0].ConnectToSubnet(theSubNet);
                             iosystem = deviceInterface.IoControllers[0].CreateIoSystem("fieldIOs");
                         }
-                        else if (theMasterCopy.Name.Contains("HMI") || theMasterCopy.Name.Contains("ET200ECO"))
+                        else if (theMasterCopy.Name.Contains("HMI") || theMasterCopy.Name.Contains("ECO") || theMasterCopy.Name.Contains("WZS120"))
                         {
                             deviceInterface = deviceJustCreated.DeviceItems[1].DeviceItems[0].GetService<Siemens.Engineering.HW.Features.NetworkInterface>();
                             deviceInterface.Nodes[0].ConnectToSubnet(theSubNet);
@@ -507,7 +572,7 @@ namespace TIAOpennessProjectGenerator
                 {
                     foreach (Device createdDevice in theProject.Devices)
                     {
-                        if (createdDevice.Name.Contains("ET 200eco"))
+                        if (createdDevice.Name.Contains("ET 200eco") || createdDevice.Name.Contains("SINAMICS S"))
                         {
                             createdDevice.DeviceItems[1].DeviceItems[0].GetService<Siemens.Engineering.HW.Features.NetworkInterface>().IoConnectors[0].ConnectToIoSystem(iosystem);
                         }
@@ -580,7 +645,6 @@ namespace TIAOpennessProjectGenerator
             if (tiaportal != null && tiaportal.Projects.Count == 1 && tiaportal.GlobalLibraries.Count > 0)
             {
                 DeviceItem plcitem = null;
-                
 
                 foreach (Device device in tiaportal.Projects[0].Devices)
                 {
@@ -674,5 +738,512 @@ namespace TIAOpennessProjectGenerator
             }
         }
         #endregion
+
+        #region Config S120
+        private void UpdateS120ModuleList_Button(object sender, EventArgs e)
+        {
+            if (s120ConfigList.Items.Count > 0)
+            {
+                if (s120ConfigList.SelectedItems[0].SubItems[0].Text.Contains("LM"))
+                {
+                    s120ConfigList.SelectedItems[0].SubItems[1].Text = "1";
+                    s120ConfigList.SelectedItems[0].SubItems[3].Text = "370";
+
+                    switch (s120ConfigList.SelectedItems[0].Index)
+                    {
+                        case 0:
+                            s120ConfigList.Items[1].SubItems[1].Text = "0";
+                            s120ConfigList.Items[2].SubItems[1].Text = "0";
+                            break;
+
+                        case 1:
+                            s120ConfigList.Items[0].SubItems[1].Text = "0";
+                            s120ConfigList.Items[2].SubItems[1].Text = "0";
+                            break;
+
+                        case 2:
+                            s120ConfigList.Items[0].SubItems[1].Text = "0";
+                            s120ConfigList.Items[1].SubItems[1].Text = "0";
+                            break;
+                    }
+                }
+                else
+                {
+                    s120ConfigList.SelectedItems[0].SubItems[1].Text = numberofS120ModulestoCreate.Text;
+                    s120ConfigList.SelectedItems[0].SubItems[3].Text = "3";
+                }
+
+                foreach (ListViewItem s120ConfigListItem in s120ConfigList.Items)
+                {
+                    s120ConfigListItem.SubItems[2].Text = startIOAddressofS120Module.Text;
+                }
+            }
+        }
+
+        private void ConfigS120Modules_Button(object sender, EventArgs e)
+        {
+            Device theS120Station;
+
+            if (s120StationsList.Items.Count > 0 && s120StationsList.SelectedItems.Count == 1)
+            {
+                theS120Station = tiaportal.Projects[0].Devices.Find(s120StationsList.SelectedItems[0].SubItems[0].Text);
+
+                if (theS120Station.DeviceItems[1].DeviceItems[0].GetService<Siemens.Engineering.HW.Features.NetworkInterface>().IoConnectors[0].ConnectedToIoSystem != null)
+                {
+                    theS120Station.DeviceItems[1].DeviceItems[0].GetService<Siemens.Engineering.HW.Features.NetworkInterface>().IoConnectors[0].DisconnectFromIoSystem();
+                }
+
+                foreach(ListViewItem theS120Module in s120ConfigList.Items)
+                {
+                    if (theS120Module.SubItems[0].Text.Contains("LM") && theS120Module.SubItems[1].Text == "1")
+                    {
+                        switch (theS120Module.SubItems[0].Text)
+                        {
+                            case "BLM":
+                                theS120Station.PlugNew("OrderNumber:6SL3130-1TE22-0Axx", "WZBLM", 65535);
+                                break;
+
+                            case "SLM":
+                                theS120Station.PlugNew("OrderNumber:6SL3130-6TE23-6Axx", "WZSLM", 65535);
+                                break;
+
+                            case "ALM":
+                                theS120Station.PlugNew("OrderNumber:6SL3130-7TE23-6Axx", "WZALM", 65535);
+                                break;
+                        }
+                        break;
+                    }
+                }
+
+                foreach(ListViewItem theS120Module in s120ConfigList.Items)
+                {
+                    if (theS120Module.SubItems[0].Text == "SMM" && int.Parse(theS120Module.SubItems[1].Text) > 0)
+                    {
+                        for (int index = 1; index <= int.Parse(theS120Module.SubItems[1].Text); index ++)
+                        {
+                            theS120Station.PlugNew("OrderNumber:6SL3120-1TE13-0Axx//10001", "WZSMM_" + index.ToString(), 65535);
+                        }
+                    }
+
+                    else if (theS120Module.SubItems[0].Text == "DMM" && int.Parse(theS120Module.SubItems[1].Text) > 0)
+                    {
+                        for (int index = 1; index <= int.Parse(theS120Module.SubItems[1].Text); index++)
+                        {
+                            theS120Station.PlugNew("OrderNumber:6SL3120-2TE13-0Axx//10011", "WZDMM_" + index.ToString(), 65535);
+                        }
+                    }
+                }
+
+                PlcSoftware thePLCSoftware = null;
+
+                foreach (Device configuredDevice in tiaportal.Projects[0].Devices)
+                {
+                    if (configuredDevice.Name.Contains("PLCX"))
+                    {
+                        IoSystem theIOSystem = configuredDevice.DeviceItems[1].DeviceItems[3].GetService<Siemens.Engineering.HW.Features.NetworkInterface>().IoControllers[0].IoSystem;
+                        theS120Station.DeviceItems[1].DeviceItems[0].GetService<Siemens.Engineering.HW.Features.NetworkInterface>().IoConnectors[0].ConnectToIoSystem(theIOSystem);
+                        
+                        thePLCSoftware = configuredDevice.DeviceItems[1].GetService<SoftwareContainer>().Software as PlcSoftware;
+                        thePLCSoftware.TagTableGroup.TagTables.Create(theS120Station.Name);
+                        break;
+                    }
+                }
+                
+                if (thePLCSoftware.TypeGroup.Groups.Find("S120Telegram") == null)
+                {
+                    thePLCSoftware.TypeGroup.Groups.Create("S120Telegram");
+
+                    if (libraryPathText.TextLength > 0 && tiaportal.GlobalLibraries.Count > 0)
+                    {
+                        foreach (GlobalLibrary globalLibrary in tiaportal.GlobalLibraries)
+                        {
+                            if (globalLibrary.Name + ".al19" == Path.GetFileName(libraryPathText.Text))
+                            {
+                                LibraryTypeFolder theS120TelegramFolder = globalLibrary.TypeFolder.Folders.Find("UDT").Folders.Find("S120Telegram");
+                                
+                                foreach (LibraryType theS120Telegram in theS120TelegramFolder.Types)
+                                {
+                                    foreach (PlcTypeLibraryTypeVersion theS120TelegramVersions in theS120Telegram.Versions)
+                                    {
+                                        if (theS120TelegramVersions.IsDefault)
+                                        {
+                                            thePLCSoftware.TypeGroup.Groups.Find("S120Telegram").Types.CreateFrom(theS120TelegramVersions);
+                                            break;
+                                        }
+                                    }
+                                    
+                                }
+                            break;
+                            }
+                        }
+                    }
+                }
+
+                Int32 addressOffset = 0;
+
+                foreach (DeviceItem theS120Module in theS120Station.DeviceItems)
+                {
+                    DriveObjectContainer theS120DriveObject = theS120Module.GetService<DriveObjectContainer>();
+
+                    if (theS120Module.Name.Contains("Infeed"))
+                    {
+                        theS120DriveObject.DriveObjects[0].Telegrams[0].TelegramNumber = 370;
+                        theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress = Int32.Parse(s120ConfigList.Items[0].SubItems[2].Text) + addressOffset;
+                        addressOffset += Math.Max(theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].Length / 8, theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[1].Length / 8);
+
+                        if (thePLCSoftware != null)
+                        {
+                            PlcTag thePLCTag_I = thePLCSoftware.TagTableGroup.TagTables.Find(theS120Station.Name).Tags.Create(theS120Station.Name + "_Infeed_I");
+                            PlcTag thePLCTag_Q = thePLCSoftware.TagTableGroup.TagTables.Find(theS120Station.Name).Tags.Create(theS120Station.Name + "_Infeed_Q");
+
+                            thePLCTag_I.DataTypeName = "S120_LM_Tele370_I";
+                            thePLCTag_Q.DataTypeName = "S120_LM_Tele370_Q";
+
+                            thePLCTag_I.LogicalAddress = "%I" + theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress.ToString() + ".0";
+                            thePLCTag_Q.LogicalAddress = "%Q" + theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress.ToString() + ".0";
+                        }
+                    }
+                    else if (theS120Module.Name == "WZS120CU320-2PN")
+                    {
+                        theS120DriveObject.DriveObjects[0].Telegrams[0].TelegramNumber = 390;
+                        theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress = Int32.Parse(s120ConfigList.Items[0].SubItems[2].Text) + addressOffset;
+                        addressOffset += Math.Max(theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].Length / 8, theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[1].Length / 8);
+
+                        if (thePLCSoftware != null)
+                        {
+                            PlcTag thePLCTag_I = thePLCSoftware.TagTableGroup.TagTables.Find(theS120Station.Name).Tags.Create(theS120Station.Name + "_CU320_I");
+                            PlcTag thePLCTag_Q = thePLCSoftware.TagTableGroup.TagTables.Find(theS120Station.Name).Tags.Create(theS120Station.Name + "_CU320_Q");
+
+                            thePLCTag_I.DataTypeName = "S120_CU_Tele390_I";
+                            thePLCTag_Q.DataTypeName = "S120_CU_Tele390_Q";
+
+                            thePLCTag_I.LogicalAddress = "%I" + theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress.ToString() + ".0";
+                            thePLCTag_Q.LogicalAddress = "%Q" + theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress.ToString() + ".0";
+                        }
+                    }
+                    else if (theS120Module.Name.Contains("Drive axis"))
+                    {
+                        theS120DriveObject.DriveObjects[0].Telegrams[0].TelegramNumber = 3;
+                        theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress = Int32.Parse(s120ConfigList.Items[0].SubItems[2].Text) + addressOffset;
+                        addressOffset += Math.Max(theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].Length / 8, theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[1].Length / 8);
+
+                        if (thePLCSoftware != null)
+                        {
+                            PlcTag thePLCTag_I = thePLCSoftware.TagTableGroup.TagTables.Find(theS120Station.Name).Tags.Create(theS120Station.Name + "_" + theS120Module.Name + "_I");
+                            PlcTag thePLCTag_Q = thePLCSoftware.TagTableGroup.TagTables.Find(theS120Station.Name).Tags.Create(theS120Station.Name + "_" + theS120Module.Name + "_Q");
+
+                            thePLCTag_I.DataTypeName = "S120_MM_Tele3_I";
+                            thePLCTag_Q.DataTypeName = "S120_MM_Tele3_Q";
+
+                            thePLCTag_I.LogicalAddress = "%I" + theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress.ToString() + ".0";
+                            thePLCTag_Q.LogicalAddress = "%Q" + theS120DriveObject.DriveObjects[0].Telegrams[0].Addresses[0].StartAddress.ToString() + ".0";
+
+                            if (thePLCSoftware.TechnologicalObjectGroup.Groups.Find(theS120Station.Name) == null)
+                            {
+                                thePLCSoftware.TechnologicalObjectGroup.Groups.Create(theS120Station.Name);
+                                thePLCSoftware.TechnologicalObjectGroup.Groups.Find(theS120Station.Name).TechnologicalObjects.Create(theS120Station.Name + "_" + theS120Module.Name, "TO_PositioningAxis", new Version("8.0"));
+                            }
+                            else
+                            {
+                                thePLCSoftware.TechnologicalObjectGroup.Groups.Find(theS120Station.Name).TechnologicalObjects.Create(theS120Station.Name + "_" + theS120Module.Name, "TO_PositioningAxis", new Version("8.0"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+ 
+        private void S120ConfigList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void S120StationsList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void NumberofS120ModulestoCreate_Changed(object sender, EventArgs e)
+        {
+            int number = 0;
+            if (!string.IsNullOrEmpty(numberofS120ModulestoCreate.Text))
+            {
+                if (!int.TryParse(numberofS120ModulestoCreate.Text, out number))
+                {
+                    numberofS120ModulestoCreate.Text = "0";
+                    MessageBox.Show("Please input integer number");
+                }
+                else if (number < 0)
+                {
+                    numberofS120ModulestoCreate.Text = "0";
+                    MessageBox.Show("Please input a positive integer number");
+                }
+            }
+        }
+
+        private void StartIOAddressofS120Module_Changed(object sender, EventArgs e)
+        {
+            int number = 0;
+            if (!string.IsNullOrEmpty(startIOAddressofS120Module.Text))
+            {
+                if (!int.TryParse(startIOAddressofS120Module.Text, out number))
+                {
+                    startIOAddressofS120Module.Text = "0";
+                    MessageBox.Show("Please input integer number");
+                }
+                else if (number < 0)
+                {
+                    startIOAddressofS120Module.Text = "0";
+                    MessageBox.Show("Please input a positive integer number");
+                }
+            }
+        }
+
+        #endregion
+
+        #region Config ET200SP
+
+        private void ConfigET200SP_Button(object sender, EventArgs e)
+        {
+            Device theET200SPStation = null;
+            PlcTagTable theET200SPIOTagTable = null;
+            PlcSoftware thePLCSoftware = null;
+
+            int slot = 1;
+            int addressOffset = 0;
+
+            theET200SPStation = tiaportal.Projects[0].Devices.Find(et200SPStationList.SelectedItems[0].SubItems[0].Text);
+
+            foreach (Device configuredDevice in tiaportal.Projects[0].Devices)
+            {
+                if (configuredDevice.Name.Contains("PLCX"))
+                {
+                    thePLCSoftware = configuredDevice.DeviceItems[1].GetService<SoftwareContainer>().Software as PlcSoftware;
+                    theET200SPIOTagTable = thePLCSoftware.TagTableGroup.TagTables.Create(theET200SPStation.Name);
+                    break;
+                }
+            }
+
+            if (et200SPStationList.Items.Count > 0)
+            {
+                foreach (ListViewItem theET200SPModule in et200SPConfigList.Items)
+                {
+                    switch (theET200SPModule.SubItems[0].Text)
+                    { 
+                        case "DI8":
+
+                            for (int index = 0; index < int.Parse(theET200SPModule.SubItems[1].Text); index++)
+                            {
+                                DeviceItem newModule = theET200SPStation.DeviceItems[0].PlugNew("OrderNumber:6ES7131-6BF01-0BA0/V0.0",theET200SPStation.Name + "_DI8_" + index.ToString(),slot);
+                                int theIOAddress = newModule.DeviceItems[0].Addresses[0].StartAddress = int.Parse(startIOAddressofET200SP.Text) + addressOffset;
+                                slot += 1;
+                                addressOffset += newModule.DeviceItems[0].Addresses[0].Length / 8;
+
+                                for (int tagnumber = 0; tagnumber < newModule.DeviceItems[0].Addresses[0].Length; tagnumber++)
+                                {
+                                    theET200SPIOTagTable.Tags.Create(newModule.Name + "_" + tagnumber.ToString(), "BOOL", "%I" + theIOAddress.ToString() + "." + tagnumber.ToString());
+                                }
+                            }
+
+                            break;
+
+                        case "DQ8":
+
+                            for (int index = 0; index < int.Parse(theET200SPModule.SubItems[1].Text); index++)
+                            {
+                                DeviceItem newModule = theET200SPStation.DeviceItems[0].PlugNew("OrderNumber:6ES7 132-6BF01-0BA0/V0.0", theET200SPStation.Name + "_DQ8_" + index.ToString(), slot);
+                                int theIOAddress = newModule.DeviceItems[0].Addresses[0].StartAddress = int.Parse(startIOAddressofET200SP.Text) + addressOffset;
+                                slot += 1;
+                                addressOffset += newModule.DeviceItems[0].Addresses[0].Length / 8;
+
+                                for (int tagnumber = 0; tagnumber < newModule.DeviceItems[0].Addresses[0].Length; tagnumber++)
+                                {
+                                    theET200SPIOTagTable.Tags.Create(newModule.Name + "_" + tagnumber.ToString(), "BOOL", "%Q" + theIOAddress.ToString() + "." + tagnumber.ToString());
+                                }
+                            }
+
+                            break;
+
+                        case "AI2":
+
+                            for (int index = 0; index < int.Parse(theET200SPModule.SubItems[1].Text); index++)
+                            {
+                                DeviceItem newModule = theET200SPStation.DeviceItems[0].PlugNew("OrderNumber:6ES7134-6HB00-0CA1/V2.0", theET200SPStation.Name + "_AI2_" + index.ToString(), slot);
+                                int theIOAddress = newModule.DeviceItems[0].Addresses[0].StartAddress = int.Parse(startIOAddressofET200SP.Text) + addressOffset;
+                                slot += 1;
+                                addressOffset += newModule.DeviceItems[0].Addresses[0].Length / 8;
+
+                                for (int tagnumber = 0; tagnumber < newModule.DeviceItems[0].Addresses[0].Length / 16; tagnumber++)
+                                {
+                                    theET200SPIOTagTable.Tags.Create(newModule.Name + "_" + tagnumber.ToString(), "WORD", "%IW" + (theIOAddress + tagnumber * 2).ToString());
+                                }
+                            }
+
+                            break;
+
+                        case "AO2":
+
+                            for (int index = 0; index < int.Parse(theET200SPModule.SubItems[1].Text); index++)
+                            {
+                                DeviceItem newModule = theET200SPStation.DeviceItems[0].PlugNew("OrderNumber:6ES7135-6HB00-0CA1/V1.0", theET200SPStation.Name + "_AQ2_" + index.ToString(), slot);
+                                int theIOAddress = newModule.DeviceItems[0].Addresses[0].StartAddress = int.Parse(startIOAddressofET200SP.Text) + addressOffset;
+                                slot += 1;
+                                addressOffset += newModule.DeviceItems[0].Addresses[0].Length / 8;
+
+                                for (int tagnumber = 0; tagnumber < newModule.DeviceItems[0].Addresses[0].Length / 16; tagnumber++)
+                                {
+                                    theET200SPIOTagTable.Tags.Create(newModule.Name + "_" + tagnumber.ToString(), "WORD", "%QW" + (theIOAddress + tagnumber * 2).ToString());
+                                }
+                            }
+
+                            break;
+
+                        case "F-DI8":
+
+                            for (int index = 0; index < int.Parse(theET200SPModule.SubItems[1].Text); index++)
+                            {
+                                DeviceItem newModule = theET200SPStation.DeviceItems[0].PlugNew("OrderNumber:6ES7136-6BA01-0CA0/V2.0", theET200SPStation.Name + "_FDI8_" + index.ToString(), slot);
+                                int theIOAddress = newModule.DeviceItems[0].Addresses[0].StartAddress = int.Parse(startIOAddressofET200SP.Text) + addressOffset;
+                                slot += 1;
+                                addressOffset += newModule.DeviceItems[0].Addresses[0].Length / 8;
+
+                                for (int tagnumber = 0; tagnumber < 8; tagnumber++)
+                                {
+                                    theET200SPIOTagTable.Tags.Create(newModule.Name + "_" + tagnumber.ToString(), "BOOL", "%I" + theIOAddress.ToString() + "." + tagnumber.ToString());
+                                }
+                            }
+
+                            break;
+
+                        case "F-DQ8":
+
+                            for (int index = 0; index < int.Parse(theET200SPModule.SubItems[1].Text); index++)
+                            {
+                                DeviceItem newModule = theET200SPStation.DeviceItems[0].PlugNew("OrderNumber:6ES7136-6DC00-0CA0/V1.0", theET200SPStation.Name + "_FDQ8_" + index.ToString(), slot);
+                                int theIOAddress = newModule.DeviceItems[0].Addresses[0].StartAddress = int.Parse(startIOAddressofET200SP.Text) + addressOffset;
+                                slot += 1;
+                                addressOffset += newModule.DeviceItems[0].Addresses[0].Length / 8;
+
+                                for (int tagnumber = 0; tagnumber < 8; tagnumber++)
+                                {
+                                    theET200SPIOTagTable.Tags.Create(newModule.Name + "_" + tagnumber.ToString(), "BOOL", "%Q" + theIOAddress.ToString() + "." + tagnumber.ToString());
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+        private void UpdateET200SPList_Button(object sender, EventArgs e)
+        {
+            if (et200SPConfigList.Items.Count > 0)
+            {
+                et200SPConfigList.SelectedItems[0].SubItems[1].Text = numberofET200SPModulestoCreate.Text;
+                et200SPConfigList.SelectedItems[0].SubItems[2].Text = startIOAddressofET200SP.Text;
+            }
+        }
+
+        private void NumberofET200SPModulestoCreate_Changed(object sender, EventArgs e)
+        {
+            int number = 0;
+            if (!string.IsNullOrEmpty(numberofET200SPModulestoCreate.Text))
+            {
+                if (!int.TryParse(numberofET200SPModulestoCreate.Text, out number))
+                {
+                    numberofET200SPModulestoCreate.Text = "0";
+                    MessageBox.Show("Please input integer number");
+                }
+                else if (number < 0)
+                {
+                    numberofET200SPModulestoCreate.Text = "0";
+                    MessageBox.Show("Please input a positive integer number");
+                }
+            }
+        }
+
+        private void StartIOAddressofEt200SP_Changed(object sender, EventArgs e)
+        {
+            int number = 0;
+            if (!string.IsNullOrEmpty(startIOAddressofET200SP.Text))
+            {
+                if (!int.TryParse(startIOAddressofET200SP.Text, out number))
+                {
+                    startIOAddressofET200SP.Text = "0";
+                    MessageBox.Show("Please input integer number");
+                }
+                else if (number < 0)
+                {
+                    startIOAddressofET200SP.Text = "0";
+                    MessageBox.Show("Please input a positive integer number");
+                }
+            }
+        }
+
+        #endregion
+    }
+    public class PromptWindow : IDisposable
+    {
+        private Form prompt { get; set; }
+        public string Result { get; }
+
+        public PromptWindow(string text, string caption)
+        {
+            Result = ShowDialog(text, caption);
+        }
+        //use a using statement
+        private string ShowDialog(string text, string caption)
+        {
+            prompt = new Form()
+            {
+                Width = 500,
+                Height = 150,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                Text = caption,
+                StartPosition = FormStartPosition.CenterScreen,
+                TopMost = true
+            };
+
+            System.Windows.Forms.Label textLabel = new System.Windows.Forms.Label()
+            {
+                Left = 50,
+                Top = 20,
+                Text = text,
+                Dock = DockStyle.Top,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+
+            TextBox textBox = new TextBox()
+            {
+                Left = 50,
+                Top = 50,
+                Width = 400
+            };
+
+            Button confirmation = new Button()
+            {
+                Text = "Ok",
+                Left = 350,
+                Width = 100,
+                Top = 75,
+                DialogResult = DialogResult.OK
+            };
+
+            confirmation.Click += (sender, e) => {prompt.Close();};
+            prompt.Controls.Add(textBox);
+            prompt.Controls.Add(confirmation);
+            prompt.Controls.Add(textLabel);
+            prompt.AcceptButton = confirmation;
+
+            return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : "";
+        }
+
+        public void Dispose()
+        {
+            //See Marcus comment
+            if (prompt != null)
+            {
+                prompt.Dispose();
+            }
+        }
     }
 }
