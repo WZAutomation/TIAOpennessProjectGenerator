@@ -58,6 +58,7 @@
             this.Colunm2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.Colunm3 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.addProgramTab = new System.Windows.Forms.TabPage();
+            this.button1 = new System.Windows.Forms.Button();
             this.startDBNumber = new System.Windows.Forms.Label();
             this.numberOfInstancesToCreate = new System.Windows.Forms.Label();
             this.addSW_Button = new System.Windows.Forms.Button();
@@ -395,6 +396,7 @@
             // 
             // addProgramTab
             // 
+            this.addProgramTab.Controls.Add(this.button1);
             this.addProgramTab.Controls.Add(this.startDBNumber);
             this.addProgramTab.Controls.Add(this.numberOfInstancesToCreate);
             this.addProgramTab.Controls.Add(this.addSW_Button);
@@ -408,6 +410,16 @@
             this.addProgramTab.TabIndex = 4;
             this.addProgramTab.Text = "Add Software";
             this.addProgramTab.UseVisualStyleBackColor = true;
+            // 
+            // button1
+            // 
+            this.button1.Location = new System.Drawing.Point(205, 300);
+            this.button1.Name = "button1";
+            this.button1.Size = new System.Drawing.Size(75, 23);
+            this.button1.TabIndex = 7;
+            this.button1.Text = "button1";
+            this.button1.UseVisualStyleBackColor = true;
+            this.button1.Click += new System.EventHandler(this.Button1_Click);
             // 
             // startDBNumber
             // 
@@ -474,7 +486,7 @@
             this.swListForUser.Location = new System.Drawing.Point(8, 52);
             this.swListForUser.MultiSelect = false;
             this.swListForUser.Name = "swListForUser";
-            this.swListForUser.Size = new System.Drawing.Size(623, 370);
+            this.swListForUser.Size = new System.Drawing.Size(623, 168);
             this.swListForUser.TabIndex = 0;
             this.swListForUser.UseCompatibleStateImageBehavior = false;
             this.swListForUser.View = System.Windows.Forms.View.Details;
@@ -794,8 +806,8 @@
             this.Controls.Add(this.navePrev);
             this.Controls.Add(this.toolNavigator);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.MaximizeBox = false;
             this.Name = "MainPage";
-            this.ShowInTaskbar = false;
             this.Text = "TIA Openness Project Generator";
             this.toolNavigator.ResumeLayout(false);
             this.startTIATab.ResumeLayout(false);
@@ -889,6 +901,7 @@
         private System.Windows.Forms.ListView et200SPStationList;
         private System.Windows.Forms.ColumnHeader columnHeader12;
         private System.Windows.Forms.Label label8;
+        private System.Windows.Forms.Button button1;
     }
 }
 

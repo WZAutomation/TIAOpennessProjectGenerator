@@ -1180,6 +1180,19 @@ namespace TIAOpennessProjectGenerator
         }
 
         #endregion
+
+        private void Button1_Click(object sender, EventArgs e)
+        {
+            if (tiaportal != null && tiaportal.Projects.Count > 0)
+            {
+                PlcSoftware thePLCSoftware = tiaportal.Projects[0].Devices.Find("WZDemoPLCX").DeviceItems[1].GetService<SoftwareContainer>().Software as PlcSoftware;
+
+                PlcBlock theBlock = thePLCSoftware.BlockGroup.Blocks.Find("Main");
+                theBlock.ShowInEditor();
+
+                //SendKeys.Send("This is a Text");
+            }
+        }
     }
     public class PromptWindow : IDisposable
     {
